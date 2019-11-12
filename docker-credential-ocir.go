@@ -14,15 +14,15 @@ import (
 )
 
 type DockerToken struct {
-	Token string `json:"token"`
-	Scope string `json:"scope,omitempty"`
-	Expires int64 `json:"expires_in,omitempty"`
+	Token   string `json:"token"`
+	Scope   string `json:"scope,omitempty"`
+	Expires int64  `json:"expires_in,omitempty"`
 }
 
 type TokenResponse struct {
 	ServerURL string `json:"ServerURL"`
-	Username string `json:"Username"`
-	Secret string `json:"Secret"`
+	Username  string `json:"Username"`
+	Secret    string `json:"Secret"`
 }
 
 func main() {
@@ -46,14 +46,38 @@ func main() {
 			rawUrl = rawUrl[8:]
 		}
 
-		if rawUrl[len(rawUrl) - 8:] != ".ocir.io" {
+		if rawUrl[len(rawUrl)-8:] != ".ocir.io" {
 			fmt.Println("Only *.ocir.io registry URLs are supported")
 			os.Exit(1)
 		}
 
-		tokenUrl := fmt.Sprintf("https://%s/20180419/docker/token", rawUrl)
+		// Try to get an example repo manifest
+		var realm string
+		if resp, err := http.Get(fmt.Sprintf("https://%s/v2/", rawUrl)); err != nil {
+			panic(err)
+		} else {
+			resp.Body.Close()
+			authHeader := resp.Header.Get("www-authenticate")
+			// Bearer realm="https://phx.ocir.io/20180419/docker/token",service="phx.ocir.io",scope=""
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+				panic("Unexpected www-authenticate header")
+			}
+			values := map[string]string{}
+			for _, part := range strings.Split(parts[1], ",") {
+				kv := strings.SplitN(part, "=", 2)
+				if len(kv) == 2 {
+					values[strings.ToLower(kv[0])] = strings.Trim(kv[1], "\"")
+				}
+			}
+			realm = values["realm"]
+		}
 
-		registryUrl, err := url.Parse(tokenUrl)
+		if realm == "" {
+			panic("no realm returned in initial registry handshake")
+		}
+
+		registryUrl, err := url.Parse(realm)
 		if err != nil {
 			panic(err)
 		}
@@ -66,9 +90,9 @@ func main() {
 		cl.Host = registryUrl.Host
 
 		resp, err := cl.Call(context.Background(), &http.Request{
-			Method:           "GET",
-			URL:              registryUrl,
-			Header:           map[string][]string{
+			Method: "GET",
+			URL:    registryUrl,
+			Header: map[string][]string{
 				"Accept": {"application/json"},
 			},
 		})
