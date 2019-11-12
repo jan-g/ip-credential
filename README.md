@@ -35,11 +35,11 @@ Construct a dynamic-group definition that includes your instance:
 Construct a policy that permits the instance the rights you want:
 
     # Root policy `example-instance-repo-management`
-    allow dynamic-group example-instance-dynamic-group to manage repos in tenancy
+    allow dynamic-group example-instance-dynamic-group to manage repos in tenancy where all {target.repo.name = /example*/}
 
 # Try it
 
 On the instance:
 
-    docker pull iad.ocir.io/blahblah/some/repo/path:0.0.1
+    docker pull iad.ocir.io/blahblah/example/repo/path:0.0.1
 
