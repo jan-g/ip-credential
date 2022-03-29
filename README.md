@@ -43,3 +43,10 @@ On the instance:
 
     docker pull iad.ocir.io/blahblah/example/repo/path:0.0.1
 
+### Using it with user creds instead
+
+Rather than using an auth token, you can use your user credentials instead to generate an ephemeral token.
+Install the binary with a different name and reference it as that: eg, stash it as `~/bin/docker-credential-user`
+and install a stanza such as:
+
+    {"credHelpers": {"iad.ocir.io": "user"}}

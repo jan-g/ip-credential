@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/oracle/oci-go-sdk/common"
-	"github.com/oracle/oci-go-sdk/common/auth"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
+
+	"github.com/oracle/oci-go-sdk/v63/common"
+	"github.com/oracle/oci-go-sdk/v63/common/auth"
 )
 
 type DockerToken struct {
@@ -25,8 +28,31 @@ type TokenResponse struct {
 	Secret    string `json:"Secret"`
 }
 
+func envOr(key, def string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	}
+	return def
+}
+
+var (
+	usr, _  = user.Current()
+	dir     = usr.HomeDir
+	ociConf = filepath.Join(dir, ".oci", "config")
+)
+
 func main() {
-	ip, err := auth.InstancePrincipalConfigurationProvider()
+	var cp common.ConfigurationProvider
+	var err error
+	if filepath.Base(os.Args[0]) == "docker-credential-ocir" {
+		cp, err = auth.InstancePrincipalConfigurationProvider()
+	} else {
+		cp, err = common.ConfigurationProviderFromFileWithProfile(
+			envOr("OCI_CLI_CONFIG_FILE", ociConf),
+			envOr("OCI_CLI_PROFILE", "DEFAULT"),
+			envOr("OCI_CLI_PASSPHRASE", ""), // in an env var?!
+		)
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -46,10 +72,10 @@ func main() {
 			rawUrl = rawUrl[8:]
 		}
 
-		if rawUrl[len(rawUrl)-8:] != ".ocir.io" {
-			fmt.Println("Only *.ocir.io registry URLs are supported")
-			os.Exit(1)
-		}
+		//		if rawUrl[len(rawUrl)-8:] != ".ocir.io" {
+		//			fmt.Println("Only *.ocir.io registry URLs are supported")
+		//			os.Exit(1)
+		//		}
 
 		// Try to get an example repo manifest
 		var realm string
@@ -60,6 +86,7 @@ func main() {
 			authHeader := resp.Header.Get("www-authenticate")
 			// Bearer realm="https://phx.ocir.io/20180419/docker/token",service="phx.ocir.io",scope=""
 			parts := strings.Split(authHeader, " ")
+
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 				panic("Unexpected www-authenticate header")
 			}
@@ -82,7 +109,7 @@ func main() {
 			panic(err)
 		}
 
-		cl, err := common.NewClientWithConfig(ip)
+		cl, err := common.NewClientWithConfig(cp)
 		if err != nil {
 			panic(err)
 		}
